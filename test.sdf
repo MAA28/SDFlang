@@ -1,2 +1,2 @@
-> P
-< P.x
+> P, math
+< math.sqrt(add(mul(P.x, P.x), mul(P.y, P.y)))
