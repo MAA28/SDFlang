@@ -1,2 +1,16 @@
-> P, math
-< math.sqrt(add(mul(P.x, P.x), mul(P.y, P.y)))
+> P, math, List, Vec2d
+#d = math.sqrt(add(mul(P.x, P.x), mul(P.y, P.y)))
+#r = 0.5
+
+val = 0
+
+points = List(Vec2d(0.1,0),Vec2d(-0.1,0))
+for[i=0:i < len(points):i=add(i,1)]
+{
+    x = points.get(i).x
+    #d = sub(math.sqrt(add(pow(points.get(i).x, 2), pow(points.get(i).y, 2))), r)
+    #val = add(d, val)
+}
+
+
+< val

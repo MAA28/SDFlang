@@ -1,11 +1,11 @@
 from SDF import SDF
 from pymunk.vec2d import Vec2d
-
+from PIL import Image
 
 def main():
     sdf = SDF('test.sdf')
 
-    #print(sdf.compute(Vec2d(1, 2), 2))
+    sdf.evaluate([[-1, 1], [-1, 1]], [25, 25]).resize((1000, 1000),  Image.NEAREST).show()
 
 
 if __name__ == '__main__':

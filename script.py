@@ -1,10 +1,14 @@
 from colorama import Style, Fore
 import math, numpy
 from pymunk.vec2d import Vec2d
+import re
+from fake_list import fake_list
 
 
 class Script:
-    def __init__(self, lines: list[str]):
+    def __init__(self, lines: list[str], in_debug: bool = False):
+        self.in_debug = in_debug
+
         self.keywords = {
             'for': ForLoop,
             'while': WhileLoop,
@@ -15,7 +19,8 @@ class Script:
             'math': math,
             'numpy': numpy,
             'complex': complex,
-            'Vec2d': Vec2d
+            'Vec2d': Vec2d,
+            'List': fake_list
         }
 
         self.functions = {
@@ -25,7 +30,8 @@ class Script:
             'div': lambda x, y: x / y,
             'pow': pow,
             'round': round,
-            'abs': abs
+            'abs': abs,
+            'len': len
         }
 
         self.lines = []
@@ -40,22 +46,22 @@ class Script:
                 if keyword not in self.keywords:
                     self.error(i, f'{keyword} is not a legal keyword.')
 
-                loop = self.keywords[keyword]
+                key = self.keywords[keyword]
 
                 parameter_tuple = line[line.find('[') + 1: line.find(']')].split(':')
 
-                loop_lines = []
+                key_lines = []
 
                 k = n + 2
-                while (k < len(lines)):
+                while k < len(lines):
                     loop_line, j = lines[k]
                     if loop_line == '}':
                         break
-                    loop_lines.append(lines[k])
+                    key_lines.append(lines[k])
                     k += 1
                 n = k + 1
 
-                self.lines.append((loop(parameter_tuple, loop_lines), i))
+                self.lines.append((key(parameter_tuple, key_lines, self.in_debug), i))
             else:
                 self.lines.append(lines[n])
             n += 1
@@ -71,7 +77,8 @@ class Script:
         print(f'Print:   {message}\n\t{line[1]}: {line[0]}')
 
     def debug(self, line, message: str):
-        print(f'{Fore.BLUE}Debug:   {message}\n\t{line[1]}: {line[0]}{Style.RESET_ALL}')
+        if self.in_debug:
+            print(f'{Fore.BLUE}Debug:   {message}\n\t{line[1]}: {line[0]}{Style.RESET_ALL}')
 
     def interpret(self, scopes):
         scopes.append({})
@@ -86,7 +93,6 @@ class Script:
     def execute(self, line, scopes):
         if line == '':
             return scopes
-        print(line)
         # check if line is variable assignment
         if '=' in line[0]:
             parts = line[0].split('=')
@@ -114,12 +120,14 @@ class Script:
         return single_scope
 
     def evaluate(self, expression, scope):
-        print(expression)
+        print(f'{expression=}')
+        print(expression.split('.'))
+
         opening_brace = expression.find('(')
         closing_brace = len(expression) - expression[-1].find(')') if ')' in expression else -1
 
         if opening_brace == closing_brace == -1:
-            if expression.isnumeric():
+            if re.fullmatch(r'[-+]?\d+(\.\d+)?', expression):
                 return eval(expression)
             elif expression.split('.')[0] in scope:
                 return eval(expression, scope)
@@ -128,12 +136,10 @@ class Script:
 
         parameters = ['']
         depth = 0
-        for char in expression[opening_brace + 1: closing_brace -1]:
+        for char in expression[opening_brace + 1: closing_brace - 1]:
             if depth == 0 and char == ',':
                 parameters.append('')
                 continue
-
-
 
             parameters[-1] += char
             if char == '(':
@@ -142,14 +148,12 @@ class Script:
                 depth -= 1
                 if depth == 0:
                     parameters.append('')
-            print(depth, char)
 
-        if parameters[-1] == '':
-            parameters.pop()
-        print(parameters)
-        parameters = [self.evaluate(parameter, scope) for parameter in parameters ]
+        for _ in range(parameters.count('')):
+            parameters.remove('')
 
-        print(expression,parameters)
+        parameters = [self.evaluate(parameter, scope) for parameter in parameters]
+        print(f'{parameters=}')
 
         if function_name in self.functions:
             return self.functions[function_name](*parameters)
@@ -160,13 +164,13 @@ class Script:
         elif function_name in scope:
             return scope[function_name](*parameters)
         else:
-            self.error((expression, 2), f'Function not defined: {function_name}')
+            self.error((expression, -1), f'Function not defined: {function_name}')
 
 
 class WhileLoop(Script):
-    def __init__(self, parameter, lines):
+    def __init__(self, parameter, lines, in_debug: bool = False):
         self.parameter = parameter
-        super(WhileLoop, self).__init__(lines)
+        super(WhileLoop, self).__init__(lines, in_debug)
 
     def interpret(self, scopes):
         broken = False
@@ -189,9 +193,9 @@ class WhileLoop(Script):
 
 
 class ForLoop(Script):
-    def __init__(self, parameter, lines):
+    def __init__(self, parameter, lines, in_debug: bool = False):
         self.parameter = parameter
-        super(ForLoop, self).__init__(lines)
+        super(ForLoop, self).__init__(lines, in_debug)
 
     def interpret(self, scopes):
         broken = False
@@ -209,18 +213,21 @@ class ForLoop(Script):
                     break
                 elif isinstance(line[0], Script):
                     scopes = line[0].interpret(scopes)
-                elif not '#' in line[0]:
+                elif '#' not in line[0]:
                     scopes = self.execute(line, scopes)
                 self.debug(line, scopes)
             if not broken:
                 scopes = self.execute((self.parameter[2], 'for loop parameters'), scopes)
+            scope = self.combine_scopes(scopes)
+
+
         return scopes[:-1]
 
 
 class ifStatement(Script):
-    def __init__(self, parameter, lines):
+    def __init__(self, parameter, lines, in_debug: bool = False):
         self.parameter = parameter
-        super(ifStatement, self).__init__(lines)
+        super(ifStatement, self).__init__(lines, in_debug)
 
     def interpret(self, scopes):
         scopes.append({})
@@ -240,7 +247,7 @@ class ifStatement(Script):
 
 
 class RootScript(Script):
-    def __init__(self, lines: list[str]):
+    def __init__(self, lines: list[str], in_debug: bool = False):
 
         lines = [(line, i + 1) for i, line in enumerate(lines)]  # numbering lines
 
@@ -263,7 +270,7 @@ class RootScript(Script):
             self.error(lines[-1], 'No exports. SDF can not be evaluated if you do not export anything.')
 
         # parsing rest of script
-        super(RootScript, self).__init__(lines)
+        super(RootScript, self).__init__(lines, in_debug)
 
     def interpret(self, P: Vec2d = None, T: float = None):
         scopes = [{}]
@@ -285,4 +292,3 @@ class RootScript(Script):
 
         results = self.execute((f'__result__={self.export}', -1), scopes)
         return results[0]['__result__']
-
